@@ -122,7 +122,6 @@ func (e *Expector) addOutput(out []byte) {
 	defer e.Unlock()
 
 	e.buffer.Write(out)
-
 }
 
 func (e *Expector) forwardOutput(count int) {
@@ -130,8 +129,8 @@ func (e *Expector) forwardOutput(count int) {
 	defer e.Unlock()
 
 	e.buffer.Next(count)
-
 }
+
 func (e *Expector) nextOutput() []byte {
 	e.RLock()
 	defer e.RUnlock()
