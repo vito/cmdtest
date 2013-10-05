@@ -67,17 +67,17 @@ func (e *Expector) ExpectWithTimeout(pattern string, timeout time.Duration) erro
 		return nil
 	case err := <-e.outputError:
 		if err == io.EOF {
-			return e.failedMatch(pattern)
+			return e.matchFailure(pattern)
 		} else {
 			return err
 		}
 	case <-time.After(timeout):
 		cancel <- true
-		return e.failedMatch(pattern)
+		return e.matchFailure(pattern)
 	}
 }
 
-func (e *Expector) matchFailure(pattern string) ExpectionFailed {
+func (e *Expector) matchFailure(pattern string) ExpectationFailed {
 	return ExpectationFailed{
 		Wanted: pattern,
 		Next:   string(e.nextOutput()),
