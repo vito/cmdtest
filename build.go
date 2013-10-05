@@ -1,9 +1,9 @@
 package cmdtest
 
 import (
-	"os/exec"
-	"os"
 	"io/ioutil"
+	"os"
+	"os/exec"
 )
 
 func Build(mainPath string) (string, error) {

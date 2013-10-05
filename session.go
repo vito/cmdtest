@@ -1,17 +1,17 @@
 package cmdtest
 
 import (
-	"os/exec"
-	"io"
 	"fmt"
-	"time"
+	"io"
+	"os/exec"
 	"syscall"
+	"time"
 )
 
 type Session struct {
 	cmd *exec.Cmd
 
-	stdin io.WriteCloser
+	stdin  io.WriteCloser
 	stdout *Expector
 	stderr *Expector
 }
@@ -34,8 +34,8 @@ func Start(executable string, args ...string) (*Session, error) {
 		return nil, err
 	}
 
-	outExpector := NewExpector(stdout, 10 * time.Second)
-	errExpector := NewExpector(stderr, 10 * time.Second)
+	outExpector := NewExpector(stdout, 10*time.Second)
+	errExpector := NewExpector(stderr, 10*time.Second)
 
 	err = cmd.Start()
 	if err != nil {
@@ -45,7 +45,7 @@ func Start(executable string, args ...string) (*Session, error) {
 	return &Session{
 		cmd: cmd,
 
-		stdin: stdin,
+		stdin:  stdin,
 		stdout: outExpector,
 		stderr: errExpector,
 	}, nil
