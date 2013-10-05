@@ -108,12 +108,12 @@ func (e *Expector) monitor() {
 			e.addOutput(buf[:read])
 		}
 
+		e.notify()
+
 		if err != nil {
 			e.outputError <- err
 			break
 		}
-
-		e.notify()
 	}
 }
 
