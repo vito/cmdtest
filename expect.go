@@ -16,19 +16,21 @@ type Expector struct {
 	outputError chan error
 	listen      chan bool
 
-	offset int
-	buffer *bytes.Buffer
+	offset     int
+	buffer     *bytes.Buffer
+	fullBuffer *bytes.Buffer
 
 	sync.RWMutex
 }
 
 type ExpectationFailed struct {
 	Wanted string
-	Got    string
+	Next   string
+	Output string
 }
 
 func (e ExpectationFailed) Error() string {
-	return fmt.Sprintf("Expected to see '%s', got: %#v", e.Wanted, e.Got)
+	return fmt.Sprintf("Expected to see '%s', got stuck at: %#v.\n\nFull output:\n\n%s", e.Wanted, e.Next, e.Output)
 }
 
 func NewExpector(out io.Reader, defaultTimeout time.Duration) *Expector {
@@ -39,7 +41,8 @@ func NewExpector(out io.Reader, defaultTimeout time.Duration) *Expector {
 		outputError: make(chan error),
 		listen:      make(chan bool),
 
-		buffer: new(bytes.Buffer),
+		buffer:     new(bytes.Buffer),
+		fullBuffer: new(bytes.Buffer),
 	}
 
 	go e.monitor()
@@ -63,14 +66,22 @@ func (e *Expector) ExpectWithTimeout(pattern string, timeout time.Duration) erro
 	case <-e.match(regexp, cancel):
 		return nil
 	case err := <-e.outputError:
-		return err
+		if err == io.EOF {
+			return e.failedMatch(pattern)
+		} else {
+			return err
+		}
 	case <-time.After(timeout):
 		cancel <- true
+		return e.failedMatch(pattern)
+	}
+}
 
-		return ExpectationFailed{
-			Wanted: pattern,
-			Got:    string(e.nextOutput()),
-		}
+func (e *Expector) matchFailure(pattern string) ExpectionFailed {
+	return ExpectationFailed{
+		Wanted: pattern,
+		Next:   string(e.nextOutput()),
+		Output: string(e.fullOutput()),
 	}
 }
 
@@ -122,6 +133,7 @@ func (e *Expector) addOutput(out []byte) {
 	defer e.Unlock()
 
 	e.buffer.Write(out)
+	e.fullBuffer.Write(out)
 }
 
 func (e *Expector) forwardOutput(count int) {
@@ -136,6 +148,13 @@ func (e *Expector) nextOutput() []byte {
 	defer e.RUnlock()
 
 	return e.buffer.Bytes()
+}
+
+func (e *Expector) fullOutput() []byte {
+	e.RLock()
+	defer e.RUnlock()
+
+	return e.fullBuffer.Bytes()
 }
 
 func (e *Expector) notify() {
