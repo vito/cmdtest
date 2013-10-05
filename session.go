@@ -55,8 +55,16 @@ func (s Session) ExpectOutput(pattern string) error {
 	return s.stdout.Expect(pattern)
 }
 
+func (s Session) ExpectOutputWithTimeout(pattern string, timeout time.Duration) error {
+	return s.stdout.ExpectWithTimeout(pattern, timeout)
+}
+
 func (s Session) ExpectError(pattern string) error {
 	return s.stderr.Expect(pattern)
+}
+
+func (s Session) ExpectErrorWithTimeout(pattern string, timeout time.Duration) error {
+	return s.stderr.ExpectWithTimeout(pattern, timeout)
 }
 
 func (s Session) Wait(timeout time.Duration) (int, error) {
