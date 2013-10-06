@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 )
@@ -13,8 +14,7 @@ type Expector struct {
 	output         io.Reader
 	defaultTimeout time.Duration
 
-	outputError chan error
-	listen      chan bool
+	closed bool
 
 	offset     int
 	buffer     *bytes.Buffer
@@ -24,22 +24,30 @@ type Expector struct {
 }
 
 type ExpectationFailed struct {
-	Wanted string
+	Branches []ExpectBranch
 	Next   string
 	Output string
 }
 
 func (e ExpectationFailed) Error() string {
-	return fmt.Sprintf("Expected to see '%s', got stuck at: %#v.\n\nFull output:\n\n%s", e.Wanted, e.Next, e.Output)
+	patterns := []string{}
+
+	for _, branch := range e.Branches {
+		patterns = append(patterns, branch.Pattern)
+	}
+
+	return fmt.Sprintf(
+		"Expected to see '%s', got stuck at: %#v.\n\nFull output:\n\n%s",
+		strings.Join(patterns, "' or '"),
+		e.Next,
+		e.Output,
+	)
 }
 
 func NewExpector(out io.Reader, defaultTimeout time.Duration) *Expector {
 	e := &Expector{
 		output:         out,
 		defaultTimeout: defaultTimeout,
-
-		outputError: make(chan error),
-		listen:      make(chan bool),
 
 		buffer:     new(bytes.Buffer),
 		fullBuffer: new(bytes.Buffer),
@@ -55,54 +63,76 @@ func (e *Expector) Expect(pattern string) error {
 }
 
 func (e *Expector) ExpectWithTimeout(pattern string, timeout time.Duration) error {
-	regexp, err := regexp.Compile(pattern)
-	if err != nil {
-		return err
+	return e.ExpectBranchesWithTimeout(
+		timeout,
+		ExpectBranch{
+			Pattern: pattern,
+			Callback: func() {},
+		},
+	)
+
+}
+
+func (e *Expector) ExpectBranches(branches ...ExpectBranch) error {
+	return e.ExpectBranchesWithTimeout(e.defaultTimeout, branches...)
+}
+
+func (e *Expector) ExpectBranchesWithTimeout(timeout time.Duration, branches ...ExpectBranch) error {
+	matchResults := make(chan func())
+
+	for _, branch := range branches {
+		re, err := regexp.Compile(branch.Pattern)
+		if err != nil {
+			return err
+		}
+
+		branch.stop = make(chan bool)
+		branch.pattern = re
+
+		go branch.match(matchResults, e)
 	}
 
-	cancel := make(chan bool, 1)
+	matchedCallback := make(chan func())
+	allComplete := make(chan bool)
+
+	go consumeResults(branches, matchResults, matchedCallback, allComplete)
 
 	select {
-	case <-e.match(regexp, cancel):
+	case callback := <-matchedCallback:
+		callback()
 		return nil
-	case err := <-e.outputError:
-		return err
+	case <-allComplete:
+		return e.failedMatch(branches)
 	case <-time.After(timeout):
-		cancel <- true
-		return e.matchFailure(pattern)
+		for _, b := range branches {
+			b.cancel()
+		}
+
+		return e.failedMatch(branches)
 	}
 }
 
-func (e *Expector) matchFailure(pattern string) ExpectationFailed {
+func consumeResults(branches []ExpectBranch, matchResults chan func(), matchedCallback chan func(), allComplete chan bool) {
+	sentCallback := false
+
+	for _ = range branches {
+		result := <-matchResults
+
+		if result != nil && !sentCallback {
+			sentCallback = true
+			matchedCallback <- result
+		}
+	}
+
+	allComplete <- true
+}
+
+func (e *Expector) failedMatch(branches []ExpectBranch) ExpectationFailed {
 	return ExpectationFailed{
-		Wanted: pattern,
+		Branches: branches,
 		Next:   string(e.nextOutput()),
 		Output: string(e.fullOutput()),
 	}
-}
-
-func (e *Expector) match(regexp *regexp.Regexp, cancel chan bool) chan bool {
-	matchResult := make(chan bool)
-
-	go func() {
-		for {
-			found := regexp.FindIndex(e.nextOutput())
-			if found != nil {
-				e.forwardOutput(found[1])
-				matchResult <- true
-				break
-			}
-
-			select {
-			case <-e.listen:
-			case <-time.After(100 * time.Millisecond):
-			case <-cancel:
-				return
-			}
-		}
-	}()
-
-	return matchResult
 }
 
 func (e *Expector) monitor() {
@@ -115,16 +145,12 @@ func (e *Expector) monitor() {
 			e.addOutput(buf[:read])
 		}
 
-		e.notify()
-
 		if err != nil {
-			if err != io.EOF {
-				e.outputError <- err
-			}
-
 			break
 		}
 	}
+
+	e.closed = true
 }
 
 func (e *Expector) addOutput(out []byte) {
@@ -154,11 +180,4 @@ func (e *Expector) fullOutput() []byte {
 	defer e.RUnlock()
 
 	return e.fullBuffer.Bytes()
-}
-
-func (e *Expector) notify() {
-	select {
-	case e.listen <- true:
-	default:
-	}
 }

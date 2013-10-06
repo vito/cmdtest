@@ -55,6 +55,10 @@ func (s Session) ExpectOutput(pattern string) error {
 	return s.stdout.Expect(pattern)
 }
 
+func (s Session) ExpectOutputBranches(branches ...ExpectBranch) error {
+	return s.stdout.ExpectBranches(branches...)
+}
+
 func (s Session) ExpectOutputWithTimeout(pattern string, timeout time.Duration) error {
 	return s.stdout.ExpectWithTimeout(pattern, timeout)
 }
