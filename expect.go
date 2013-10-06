@@ -66,11 +66,7 @@ func (e *Expector) ExpectWithTimeout(pattern string, timeout time.Duration) erro
 	case <-e.match(regexp, cancel):
 		return nil
 	case err := <-e.outputError:
-		if err == io.EOF {
-			return e.matchFailure(pattern)
-		} else {
-			return err
-		}
+		return err
 	case <-time.After(timeout):
 		cancel <- true
 		return e.matchFailure(pattern)
@@ -122,7 +118,10 @@ func (e *Expector) monitor() {
 		e.notify()
 
 		if err != nil {
-			e.outputError <- err
+			if err != io.EOF {
+				e.outputError <- err
+			}
+
 			break
 		}
 	}
