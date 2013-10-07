@@ -23,6 +23,11 @@ type Expector struct {
 	sync.RWMutex
 }
 
+type ExpectBranch struct {
+	Pattern string
+	Callback func()
+}
+
 type ExpectationFailed struct {
 	Branches []ExpectBranch
 	Next   string
@@ -78,7 +83,8 @@ func (e *Expector) ExpectBranches(branches ...ExpectBranch) error {
 }
 
 func (e *Expector) ExpectBranchesWithTimeout(timeout time.Duration, branches ...ExpectBranch) error {
-	matchResults := make(chan func())
+	matchResults := make(chan func(), len(branches))
+	stoppers := []chan bool{}
 
 	for _, branch := range branches {
 		re, err := regexp.Compile(branch.Pattern)
@@ -86,16 +92,26 @@ func (e *Expector) ExpectBranchesWithTimeout(timeout time.Duration, branches ...
 			return err
 		}
 
-		branch.stop = make(chan bool)
-		branch.pattern = re
+		stop := make(chan bool)
+		stoppers = append(stoppers, stop)
 
-		go branch.match(matchResults, e)
+		go e.match(matchResults, stop, re, branch.Callback)
 	}
 
 	matchedCallback := make(chan func())
 	allComplete := make(chan bool)
 
-	go consumeResults(branches, matchResults, matchedCallback, allComplete)
+	go func() {
+		for _ = range branches {
+			result := <-matchResults
+
+			if result != nil {
+				matchedCallback <- result
+			}
+		}
+
+		allComplete <- true
+	}()
 
 	select {
 	case callback := <-matchedCallback:
@@ -104,27 +120,45 @@ func (e *Expector) ExpectBranchesWithTimeout(timeout time.Duration, branches ...
 	case <-allComplete:
 		return e.failedMatch(branches)
 	case <-time.After(timeout):
-		for _, b := range branches {
-			b.cancel()
+		for _, stop := range stoppers {
+			select {
+			case stop <- true:
+			default:
+			}
 		}
 
 		return e.failedMatch(branches)
 	}
 }
 
-func consumeResults(branches []ExpectBranch, matchResults chan func(), matchedCallback chan func(), allComplete chan bool) {
-	sentCallback := false
+func (e *Expector) match(result chan func(), stop chan bool, pattern *regexp.Regexp, callback func()) {
+	matched := e.matchOutput(stop, pattern)
 
-	for _ = range branches {
-		result := <-matchResults
+	if matched {
+		result <- callback
+	} else {
+		result <- nil
+	}
+}
 
-		if result != nil && !sentCallback {
-			sentCallback = true
-			matchedCallback <- result
+func (e *Expector) matchOutput(stop chan bool, pattern *regexp.Regexp) bool {
+	for {
+		found := pattern.FindIndex(e.nextOutput())
+		if found != nil {
+			e.forwardOutput(found[1])
+			return true
+		}
+
+		if e.closed {
+			return false
+		}
+
+		select {
+		case <-time.After(100 * time.Millisecond):
+		case <-stop:
+			return false
 		}
 	}
-
-	allComplete <- true
 }
 
 func (e *Expector) failedMatch(branches []ExpectBranch) ExpectationFailed {
