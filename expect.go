@@ -131,6 +131,16 @@ func (e *Expector) ExpectBranchesWithTimeout(timeout time.Duration, branches ...
 	}
 }
 
+func (e *Expector) FullOutput() []byte {
+	for {
+		if e.closed {
+			return e.fullOutput()
+		}
+
+		time.Sleep(100 * time.Millisecond)
+	}
+}
+
 func (e *Expector) match(result chan func(), stop chan bool, pattern *regexp.Regexp, callback func()) {
 	matched := e.matchOutput(stop, pattern)
 

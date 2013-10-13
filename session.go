@@ -3,6 +3,7 @@ package cmdtest
 import (
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"syscall"
 	"time"
@@ -85,4 +86,12 @@ func (s Session) Wait(timeout time.Duration) (int, error) {
 	case <-time.After(timeout):
 		return -1, fmt.Errorf("command did not exit")
 	}
+}
+
+func (s Session) FullOutput() []byte {
+	return s.stdout.FullOutput()
+}
+
+func (s Session) FullErrorOutput() []byte {
+	return s.stderr.FullOutput()
 }
