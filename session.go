@@ -3,7 +3,6 @@ package cmdtest
 import (
 	"fmt"
 	"io"
-	"os"
 	"os/exec"
 	"syscall"
 	"time"
