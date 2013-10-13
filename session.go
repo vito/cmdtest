@@ -3,6 +3,7 @@ package cmdtest
 import (
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"syscall"
 	"time"
@@ -34,8 +35,8 @@ func Start(executable string, args ...string) (*Session, error) {
 		return nil, err
 	}
 
-	outExpector := NewExpector(stdout, 10*time.Second)
-	errExpector := NewExpector(stderr, 10*time.Second)
+	outExpector := NewExpector(io.TeeReader(stdout, os.Stdout), 10*time.Second)
+	errExpector := NewExpector(io.TeeReader(stderr, os.Stderr), 10*time.Second)
 
 	err = cmd.Start()
 	if err != nil {
