@@ -3,7 +3,6 @@ package cmdtest
 import (
 	"fmt"
 	"io"
-	"os"
 	"os/exec"
 	"syscall"
 	"time"
@@ -17,9 +16,13 @@ type Session struct {
 	stderr *Expector
 }
 
-func Start(executable string, args ...string) (*Session, error) {
-	cmd := exec.Command(executable, args...)
+type OutputWrapper func(io.Reader) io.Reader
 
+func Start(cmd *exec.Cmd) (*Session, error) {
+	return StartWrapped(cmd, noopWrapper, noopWrapper)
+}
+
+func StartWrapped(cmd *exec.Cmd, outWrapper OutputWrapper, errWrapper OutputWrapper) (*Session, error) {
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, err
@@ -35,8 +38,8 @@ func Start(executable string, args ...string) (*Session, error) {
 		return nil, err
 	}
 
-	outExpector := NewExpector(io.TeeReader(stdout, os.Stdout), 10*time.Second)
-	errExpector := NewExpector(io.TeeReader(stderr, os.Stderr), 10*time.Second)
+	outExpector := NewExpector(outWrapper(stdout), 10*time.Second)
+	errExpector := NewExpector(errWrapper(stderr), 10*time.Second)
 
 	err = cmd.Start()
 	if err != nil {
@@ -94,4 +97,8 @@ func (s Session) FullOutput() []byte {
 
 func (s Session) FullErrorOutput() []byte {
 	return s.stderr.FullOutput()
+}
+
+func noopWrapper(out io.Reader) io.Reader {
+	return out
 }
