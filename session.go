@@ -38,8 +38,8 @@ func StartWrapped(cmd *exec.Cmd, outWrapper OutputWrapper, errWrapper OutputWrap
 		return nil, err
 	}
 
-	outExpector := NewExpector(outWrapper(stdout), 10*time.Second)
-	errExpector := NewExpector(errWrapper(stderr), 10*time.Second)
+	outExpector := NewExpector(outWrapper(stdout), 0)
+	errExpector := NewExpector(errWrapper(stderr), 0)
 
 	err = cmd.Start()
 	if err != nil {

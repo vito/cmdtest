@@ -113,13 +113,19 @@ func (e *Expector) ExpectBranchesWithTimeout(timeout time.Duration, branches ...
 		allComplete <- true
 	}()
 
+	timeoutChan := make(<-chan time.Time)
+
+	if timeout != 0 {
+		timeoutChan = time.After(timeout)
+	}
+
 	select {
 	case callback := <-matchedCallback:
 		callback()
 		return nil
 	case <-allComplete:
 		return e.failedMatch(branches)
-	case <-time.After(timeout):
+	case <-timeoutChan:
 		for _, stop := range stoppers {
 			select {
 			case stop <- true:
