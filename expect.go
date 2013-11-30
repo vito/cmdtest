@@ -139,7 +139,7 @@ func (e *Expector) ExpectBranchesWithTimeout(timeout time.Duration, branches ...
 
 func (e *Expector) FullOutput() []byte {
 	for {
-		if e.closed {
+		if e.isClosed() {
 			return e.fullOutput()
 		}
 
@@ -165,7 +165,7 @@ func (e *Expector) matchOutput(stop chan bool, pattern *regexp.Regexp) bool {
 			return true
 		}
 
-		if e.closed {
+		if e.isClosed() {
 			return false
 		}
 
@@ -200,7 +200,7 @@ func (e *Expector) monitor() {
 		}
 	}
 
-	e.closed = true
+	e.setClosed()
 }
 
 func (e *Expector) addOutput(out []byte) {
@@ -230,4 +230,18 @@ func (e *Expector) fullOutput() []byte {
 	defer e.RUnlock()
 
 	return e.fullBuffer.Bytes()
+}
+
+func (e *Expector) isClosed() bool {
+	e.RLock()
+	defer e.RUnlock()
+
+	return e.closed
+}
+
+func (e *Expector) setClosed() {
+	e.Lock()
+	defer e.Unlock()
+
+	e.closed = true
 }
