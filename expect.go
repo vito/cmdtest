@@ -24,14 +24,14 @@ type Expector struct {
 }
 
 type ExpectBranch struct {
-	Pattern string
+	Pattern  string
 	Callback func()
 }
 
 type ExpectationFailed struct {
 	Branches []ExpectBranch
-	Next   string
-	Output string
+	Next     string
+	Output   string
 }
 
 func (e ExpectationFailed) Error() string {
@@ -71,7 +71,7 @@ func (e *Expector) ExpectWithTimeout(pattern string, timeout time.Duration) erro
 	return e.ExpectBranchesWithTimeout(
 		timeout,
 		ExpectBranch{
-			Pattern: pattern,
+			Pattern:  pattern,
 			Callback: func() {},
 		},
 	)
@@ -180,8 +180,8 @@ func (e *Expector) matchOutput(stop chan bool, pattern *regexp.Regexp) bool {
 func (e *Expector) failedMatch(branches []ExpectBranch) ExpectationFailed {
 	return ExpectationFailed{
 		Branches: branches,
-		Next:   string(e.nextOutput()),
-		Output: string(e.fullOutput()),
+		Next:     string(e.nextOutput()),
+		Output:   string(e.fullOutput()),
 	}
 }
 
