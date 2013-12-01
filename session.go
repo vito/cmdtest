@@ -3,6 +3,7 @@ package cmdtest
 import (
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"syscall"
 	"time"
@@ -14,44 +15,62 @@ type Session struct {
 	stdin  io.WriteCloser
 	stdout *Expector
 	stderr *Expector
+
+	exited chan int
 }
 
-type OutputWrapper func(io.Reader) io.Reader
+type OutputWrapper func(io.Writer) io.Writer
 
 func Start(cmd *exec.Cmd) (*Session, error) {
 	return StartWrapped(cmd, noopWrapper, noopWrapper)
 }
 
 func StartWrapped(cmd *exec.Cmd, outWrapper OutputWrapper, errWrapper OutputWrapper) (*Session, error) {
-	stdin, err := cmd.StdinPipe()
+	stdinOut, stdinIn, err := os.Pipe()
 	if err != nil {
 		return nil, err
 	}
 
-	stdout, err := cmd.StdoutPipe()
+	stdoutOut, stdoutIn, err := os.Pipe()
 	if err != nil {
 		return nil, err
 	}
 
-	stderr, err := cmd.StderrPipe()
+	stderrOut, stderrIn, err := os.Pipe()
 	if err != nil {
 		return nil, err
 	}
 
-	outExpector := NewExpector(outWrapper(stdout), 0)
-	errExpector := NewExpector(errWrapper(stderr), 0)
+	cmd.Stdin = stdinOut
+	cmd.Stdout = outWrapper(stdoutIn)
+	cmd.Stderr = errWrapper(stderrIn)
+
+	outExpector := NewExpector(stdoutOut, 0)
+	errExpector := NewExpector(stderrOut, 0)
 
 	err = cmd.Start()
 	if err != nil {
 		return nil, err
 	}
 
+	exited := make(chan int, 1)
+
+	go func() {
+		cmd.Wait()
+		exited <- cmd.ProcessState.Sys().(syscall.WaitStatus).ExitStatus()
+
+		stdoutIn.Close()
+		stderrIn.Close()
+	}()
+
 	return &Session{
 		cmd: cmd,
 
-		stdin:  stdin,
+		stdin:  stdinIn,
 		stdout: outExpector,
 		stderr: errExpector,
+
+		exited: exited,
 	}, nil
 }
 
@@ -76,16 +95,9 @@ func (s Session) ExpectErrorWithTimeout(pattern string, timeout time.Duration) e
 }
 
 func (s Session) Wait(timeout time.Duration) (int, error) {
-	exited := make(chan bool)
-
-	go func() {
-		s.cmd.Wait()
-		exited <- true
-	}()
-
 	select {
-	case <-exited:
-		return s.cmd.ProcessState.Sys().(syscall.WaitStatus).ExitStatus(), nil
+	case status := <-s.exited:
+		return status, nil
 	case <-time.After(timeout):
 		return -1, fmt.Errorf("command did not exit")
 	}
@@ -99,6 +111,6 @@ func (s Session) FullErrorOutput() []byte {
 	return s.stderr.FullOutput()
 }
 
-func noopWrapper(out io.Reader) io.Reader {
+func noopWrapper(out io.Writer) io.Writer {
 	return out
 }
