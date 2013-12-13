@@ -10,7 +10,7 @@ import (
 )
 
 type Session struct {
-	cmd *exec.Cmd
+	Cmd *exec.Cmd
 
 	Stdin  io.WriteCloser
 
@@ -65,7 +65,7 @@ func StartWrapped(cmd *exec.Cmd, outWrapper OutputWrapper, errWrapper OutputWrap
 	}()
 
 	return &Session{
-		cmd: cmd,
+		Cmd: cmd,
 
 		Stdin:  stdinIn,
 
