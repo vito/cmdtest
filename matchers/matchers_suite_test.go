@@ -2,7 +2,6 @@ package cmdtest_matchers_test
 
 import (
 	"os/exec"
-	"path"
 	"testing"
 
 	. "github.com/onsi/ginkgo"
@@ -25,8 +24,4 @@ func Run(executable string, args ...string) *cmdtest.Session {
 	}
 
 	return sess
-}
-
-func CmdTestSay(name string) *cmdtest.Session {
-	return Run(path.Join("assets", name))
 }
