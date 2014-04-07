@@ -30,7 +30,13 @@ func BuildIn(gopath string, mainPath string, args ...string) (string, error) {
 	build.Stdout = os.Stdout
 	build.Stderr = os.Stderr
 	build.Stdin = os.Stdin
-	build.Env = []string{"GOPATH=" + gopath}
+	build.Env = []string{"GOPATH=" + gopath, "PATH=" + os.Getenv("PATH")}
+
+	// Set GOROOT in the build environment if and only if it has been set.
+	goroot := os.Getenv("GOROOT")
+	if goroot != "" {
+		build.Env = append(build.Env, "GOROOT="+goroot)
+	}
 
 	err = build.Run()
 	if err != nil {
