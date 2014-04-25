@@ -64,6 +64,9 @@ func StartWrapped(cmd *exec.Cmd, outWrapper OutputWrapper, errWrapper OutputWrap
 		}
 
 		close(exited)
+
+		stdoutIn.Close()
+		stderrIn.Close()
 	}()
 
 	return &Session{
