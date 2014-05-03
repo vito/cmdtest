@@ -20,6 +20,7 @@ type ExitWithTimeoutMatcher struct {
 
 	actualStatus int
 	waitError    error
+	session      *cmdtest.Session
 }
 
 func (m *ExitWithTimeoutMatcher) Match(out interface{}) (bool, error) {
@@ -35,6 +36,7 @@ func (m *ExitWithTimeoutMatcher) Match(out interface{}) (bool, error) {
 	}
 
 	m.actualStatus = status
+	m.session = session
 
 	return status == m.Status, nil
 }
@@ -44,7 +46,11 @@ func (m *ExitWithTimeoutMatcher) FailureMessage(actual interface{}) string {
 		return m.waitError.Error()
 	}
 
-	return fmt.Sprintf("Exited with status %d, expected %d", m.actualStatus, m.Status)
+	return fmt.Sprintf("Exited with status %d, expected %d\nFull output: %s",
+		m.actualStatus,
+		m.Status,
+		string(m.session.FullOutput()),
+	)
 }
 
 func (m *ExitWithTimeoutMatcher) NegatedFailureMessage(actual interface{}) string {
@@ -52,5 +58,8 @@ func (m *ExitWithTimeoutMatcher) NegatedFailureMessage(actual interface{}) strin
 		return m.waitError.Error()
 	}
 
-	return fmt.Sprintf("Expected to not exit with %#v", m.Status)
+	return fmt.Sprintf("Expected to not exit with %#v\nFull output: %s",
+		m.Status,
+		string(m.session.FullOutput()),
+	)
 }
